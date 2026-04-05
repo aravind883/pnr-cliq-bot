@@ -54,7 +54,7 @@ def get_pnr_status(pnr):
                 arrival_time = to_parts[1].strip() if len(to_parts) > 1 else ""
 
             # -----------------------------
-            # ✅ DATE (DOM BASED FIX)
+            # ✅ DATE CLEAN EXTRACTION
             # -----------------------------
             journey_date = "N/A"
 
@@ -63,11 +63,19 @@ def get_pnr_status(pnr):
             if date_element.count() > 0:
                 raw_date = date_element.inner_text().strip()
 
-                # Example: "Wed, 22 Apr"
-                parts = raw_date.split(",")
+                # Example:
+                # "Wed, 22 Apr | SL | GN | Expected platform: 8"
+
+                # Step 1: split by "|"
+                clean_part = raw_date.split("|")[0].strip()
+
+                # Step 2: remove day (Wed,)
+                parts = clean_part.split(",")
 
                 if len(parts) > 1:
                     day_month = parts[1].strip()  # "22 Apr"
+
+                    # Step 3: add dynamic year (NOT hardcoded)
                     current_year = datetime.now().year
                     journey_date = f"{day_month} {current_year}"
 
@@ -114,7 +122,7 @@ def get_pnr_status(pnr):
                 "departure_time": departure_time,
                 "to_station": to_station,
                 "arrival_time": arrival_time,
-                "journey_date": journey_date,   # ✅ FIXED
+                "journey_date": journey_date,   # ✅ CLEANED
                 "passengers": passengers,
                 "chart_status": chart_status,
                 "pnr": pnr
