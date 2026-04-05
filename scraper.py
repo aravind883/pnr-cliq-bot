@@ -13,7 +13,7 @@ def get_pnr_status(pnr):
             page.wait_for_selector("tbody tr", timeout=20000)
 
             # -----------------------------
-            # ✅ TRAIN NAME (FIXED)
+            # TRAIN NAME (FIXED)
             # -----------------------------
             train_el = page.locator("text=/\\d{5} -/").first
             train_text = train_el.inner_text().strip() if train_el else "Unknown Train"
@@ -27,23 +27,31 @@ def get_pnr_status(pnr):
                 train_name = parts[1].strip()
 
             # -----------------------------
-            # STATIONS + TIME
+            # STATIONS + RAW TEXT
             # -----------------------------
-            station_elements = page.query_selector_all("p.body-sm.text-secondary")
+            route_blocks = page.locator("p").all_text_contents()
 
-            from_station = station_elements[0].inner_text().strip() if len(station_elements) > 0 else "Unknown"
-            to_station = station_elements[1].inner_text().strip() if len(station_elements) > 1 else "Unknown"
+            from_station = ""
+            to_station = ""
+            departure_time = ""
+            arrival_time = ""
 
-            time_elements = page.query_selector_all("p.body-md.font-semibold")
+            for text in route_blocks:
+                if "-" in text and "," in text:
+                    if not from_station:
+                        from_station = text.strip()
+                    elif not to_station:
+                        to_station = text.strip()
 
-            departure_time = time_elements[0].inner_text().strip() if len(time_elements) > 0 else "00:00"
-            arrival_time = time_elements[1].inner_text().strip() if len(time_elements) > 1 else "00:00"
-
-            departure_time = f"2026-04-22 {departure_time}"
-            arrival_time = f"2026-04-23 {arrival_time}"
+                # Extract time
+                if ":" in text and len(text.strip()) <= 5:
+                    if not departure_time:
+                        departure_time = text.strip()
+                    elif not arrival_time:
+                        arrival_time = text.strip()
 
             # -----------------------------
-            # PASSENGERS (ONLY CURRENT STATUS)
+            # PASSENGERS
             # -----------------------------
             rows = page.query_selector_all("tbody tr")
 
@@ -82,9 +90,9 @@ def get_pnr_status(pnr):
                 "train_name": train_name,
                 "train_number": train_number,
                 "from_station": from_station,
-                "departure_time": departure_time,
+                "departure_time": departure_time,   # ONLY TIME
                 "to_station": to_station,
-                "arrival_time": arrival_time,
+                "arrival_time": arrival_time,       # ONLY TIME
                 "passengers": passengers,
                 "chart_status": chart_status,
                 "pnr": pnr
