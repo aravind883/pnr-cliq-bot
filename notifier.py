@@ -1,63 +1,106 @@
 import requests
 import os
+from datetime import datetime, timedelta
 
 ZOHO_WEBHOOK = os.getenv("ZOHO_WEBHOOK_URL")
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")
 
 
-def format_message(data):
-    train = f"🚆 {data['train_name']} ({data['train_number']})"
+# -----------------------------
+# CORE PROCESSING
+# -----------------------------
+def format_datetime(date_str, time_str):
+    try:
+        return datetime.strptime(f"{date_str} {time_str}", "%d %b %Y %H:%M")
+    except:
+        return None
 
-    dep = f"{data['from_station']}"
-    arr = f"{data['to_station']}"
 
+def format_output(dt):
+    if not dt:
+        return "⚠️ Date unavailable"
+    return dt.strftime("%d %b %Y, %-I:%M %p")
+
+
+def process_data(data):
+    date = data.get("journey_date", "")
     dep_time = data.get("departure_time", "")
     arr_time = data.get("arrival_time", "")
-    date = data.get("journey_date", "")
 
-    dep_text = f"{date}, {dep_time}"
-    arr_text = f"{date}, {arr_time}"
+    dep_dt = format_datetime(date, dep_time)
+    arr_dt = format_datetime(date, arr_time)
+
+    # ✅ NEXT DAY FIX
+    if dep_dt and arr_dt and arr_dt <= dep_dt:
+        arr_dt += timedelta(days=1)
+
+    data["formatted_departure"] = format_output(dep_dt)
+    data["formatted_arrival"] = format_output(arr_dt)
+
+    return data
+
+
+# -----------------------------
+# UNIFIED MESSAGE FORMATTER
+# -----------------------------
+def format_message(data, platform="cliq"):
+    # Markdown differences
+    bold = "**" if platform == "discord" else "*"
+    code = "`" if platform == "cliq" else ""
 
     passengers = []
     for i, p in enumerate(data["passengers"], start=1):
-        passengers.append(f"Passenger {i} - {p['status']} ({p['probability']})")
+        emoji = "🔴"
+
+        if "CNF" in p["status"]:
+            emoji = "🟢"
+        elif "RAC" in p["status"]:
+            emoji = "🟡"
+
+        line = f"{emoji} Passenger {i} - {p['status']}"
+        if p["probability"] and p["probability"] != "-":
+            line += f" ({p['probability']})"
+
+        passengers.append(line)
 
     passenger_text = "\n".join(passengers)
 
-    chart = data["chart_status"]
-    pnr = data["pnr"]
-
-    link = f"https://www.confirmtkt.com/pnr-status/{pnr}"
-
     message = f"""
-🚆 **{data['train_name']} ({data['train_number']})**
+🚆 {bold}{data['train_name']} ({data['train_number']}){bold}
 
-🟢 Departure  
-{dep}  
-🕒 {dep_text}
+🟢 {bold}Departure{bold}
+{data['from_station']}
+🕒 {data['formatted_departure']}
 
-🔴 Arrival  
-{arr}  
-🕒 {arr_text}
+🔴 {bold}Arrival{bold}
+{data['to_station']}
+🕒 {data['formatted_arrival']}
 
-👥 Passenger Status  
+👥 {bold}Passenger Status{bold}
 {passenger_text}
 
-📊 Chart Status: {chart}
+📊 {bold}Chart Status:{bold} {data['chart_status']}
 
-🔖 PNR: {pnr}
-🔗 {link}
+🔖 PNR: {code}{data['pnr']}{code}
+🔗 https://www.confirmtkt.com/pnr-status/{data['pnr']}
 """
 
-    return message
+    return message.strip()
 
 
-def send_to_cliq(data):
+# -----------------------------
+# SENDERS
+# -----------------------------
+def send_to_cliq(message):
     if not ZOHO_WEBHOOK:
         print("Missing Zoho webhook")
         return
 
-    response = requests.post(ZOHO_WEBHOOK, json=data)
+    payload = {
+        "text": message
+    }
+
+    response = requests.post(ZOHO_WEBHOOK, json=payload)
     print("Cliq Status:", response.status_code)
 
 
@@ -74,12 +117,19 @@ def send_to_discord(message):
     print("Discord Status:", response.status_code)
 
 
+# -----------------------------
+# MAIN ENTRY
+# -----------------------------
 def send_notification(data):
     print("Sending payload:", data)
 
-    # Send to Cliq (existing)
-    send_to_cliq(data)
+    # ✅ Single source of truth
+    data = process_data(data)
 
-    # Send to Discord (new)
-    message = format_message(data)
-    send_to_discord(message)
+    # Generate messages
+    cliq_msg = format_message(data, "cliq")
+    discord_msg = format_message(data, "discord")
+
+    # Send
+    send_to_cliq(cliq_msg)
+    send_to_discord(discord_msg)
