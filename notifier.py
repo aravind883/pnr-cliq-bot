@@ -41,24 +41,16 @@ def process_data(data):
 
 
 # -----------------------------
-# STATUS COLOR (Discord)
+# UNIFIED MESSAGE FORMAT
 # -----------------------------
-def get_status_color(passengers):
-    for p in passengers:
-        if "CNF" in p["status"]:
-            return 0x2ecc71  # green
-        if "RAC" in p["status"]:
-            return 0xf1c40f  # yellow
-    return 0xe74c3c  # red (WL)
+def format_message(data, platform="cliq"):
+    bold = "**" if platform == "discord" else "*"
+    code = "`" if platform == "cliq" else ""
 
-
-# -----------------------------
-# DISCORD EMBED (🔥 PREMIUM)
-# -----------------------------
-def build_discord_embed(data):
     passengers = []
     for i, p in enumerate(data["passengers"], start=1):
         emoji = "🔴"
+
         if "CNF" in p["status"]:
             emoji = "🟢"
         elif "RAC" in p["status"]:
@@ -72,92 +64,36 @@ def build_discord_embed(data):
 
     passenger_text = "\n".join(passengers)
 
-    embed = {
-        "title": f"🚆 {data['train_name']} ({data['train_number']})",
-        "color": get_status_color(data["passengers"]),
-        "fields": [
-            {
-                "name": "🟢 Departure",
-                "value": f"{data['from_station']}\n🕒 {data['formatted_departure']}",
-                "inline": False
-            },
-            {
-                "name": "🔴 Arrival",
-                "value": f"{data['to_station']}\n🕒 {data['formatted_arrival']}",
-                "inline": False
-            },
-            {
-                "name": "👥 Passenger Status",
-                "value": passenger_text,
-                "inline": False
-            },
-            {
-                "name": "📊 Chart Status",
-                "value": data["chart_status"],
-                "inline": True
-            }
-        ],
-        "footer": {
-            "text": f"PNR: {data['pnr']}"
-        },
-        "url": f"https://www.confirmtkt.com/pnr-status/{data['pnr']}"
-    }
+    message = f"""
+🚆 {bold}{data['train_name']} ({data['train_number']}){bold}
 
-    return embed
-
-
-# -----------------------------
-# CLIQ PREMIUM TEXT
-# -----------------------------
-def format_cliq_message(data):
-    passengers = []
-    for i, p in enumerate(data["passengers"], start=1):
-        emoji = "🔴"
-        if "CNF" in p["status"]:
-            emoji = "🟢"
-        elif "RAC" in p["status"]:
-            emoji = "🟡"
-
-        line = f"{emoji} Passenger {i} - {p['status']}"
-        if p["probability"] and p["probability"] != "-":
-            line += f" ({p['probability']})"
-
-        passengers.append(line)
-
-    passenger_text = "\n".join(passengers)
-
-    return f"""
-━━━━━━━━━━━━━━━━━━
-🚆 *{data['train_name']} ({data['train_number']})*
-━━━━━━━━━━━━━━━━━━
-
-🟢 *Departure*
+🟢 {bold}Departure{bold}
 {data['from_station']}
 🕒 {data['formatted_departure']}
 
-🔴 *Arrival*
+🔴 {bold}Arrival{bold}
 {data['to_station']}
 🕒 {data['formatted_arrival']}
 
-👥 *Passenger Status*
+👥 {bold}Passenger Status{bold}
 {passenger_text}
 
-📊 *Chart Status:* {data['chart_status']}
+📊 {bold}Chart Status:{bold} {data['chart_status']}
 
-🔖 PNR: `{data['pnr']}`
+🔖 PNR: {code}{data['pnr']}{code}
 🔗 https://www.confirmtkt.com/pnr-status/{data['pnr']}
-""".strip()
+"""
+
+    return message.strip()
 
 
 # -----------------------------
 # SENDERS
 # -----------------------------
-def send_to_cliq(data):
+def send_to_cliq(message):
     if not ZOHO_WEBHOOK:
         print("Missing Zoho webhook")
         return
-
-    message = format_cliq_message(data)
 
     payload = {
         "text": message
@@ -167,15 +103,13 @@ def send_to_cliq(data):
     print("Cliq Status:", response.status_code)
 
 
-def send_to_discord(data):
+def send_to_discord(message):
     if not DISCORD_WEBHOOK:
         print("Missing Discord webhook")
         return
 
-    embed = build_discord_embed(data)
-
     payload = {
-        "embeds": [embed]
+        "content": message
     }
 
     response = requests.post(DISCORD_WEBHOOK, json=payload)
@@ -190,5 +124,8 @@ def send_notification(data):
 
     data = process_data(data)
 
-    send_to_cliq(data)
-    send_to_discord(data)
+    cliq_msg = format_message(data, "cliq")
+    discord_msg = format_message(data, "discord")
+
+    send_to_cliq(cliq_msg)
+    send_to_discord(discord_msg)
