@@ -1,4 +1,6 @@
 from playwright.sync_api import sync_playwright
+import re
+from datetime import datetime
 
 
 def get_pnr_status(pnr):
@@ -27,7 +29,7 @@ def get_pnr_status(pnr):
                 train_name = parts[1].strip()
 
             # -----------------------------
-            # ROUTE (FIXED EXTRACTION)
+            # ROUTE + TIME
             # -----------------------------
             route_elements = page.locator("p.body-sm").all_text_contents()
 
@@ -43,7 +45,6 @@ def get_pnr_status(pnr):
                     route_data.append(text.strip())
 
             if len(route_data) >= 2:
-                # Example: "Tambaram - TBM, 21:02"
                 from_parts = route_data[0].split(",")
                 to_parts = route_data[1].split(",")
 
@@ -52,6 +53,20 @@ def get_pnr_status(pnr):
 
                 to_station = to_parts[0].strip()
                 arrival_time = to_parts[1].strip() if len(to_parts) > 1 else ""
+
+            # -----------------------------
+            # DATE WITH YEAR (FIXED)
+            # -----------------------------
+            full_text = page.inner_text("body")
+
+            date_match = re.search(r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s(\d{1,2}\s\w+)", full_text)
+
+            journey_date = "N/A"
+
+            if date_match:
+                day_month = date_match.group(2)   # "22 Apr"
+                current_year = datetime.now().year
+                journey_date = f"{day_month} {current_year}"  # "22 Apr 2026"
 
             # -----------------------------
             # PASSENGERS
@@ -93,9 +108,10 @@ def get_pnr_status(pnr):
                 "train_name": train_name,
                 "train_number": train_number,
                 "from_station": from_station,
-                "departure_time": departure_time,   # ✅ now always from split
+                "departure_time": departure_time,
                 "to_station": to_station,
                 "arrival_time": arrival_time,
+                "journey_date": journey_date,   # ✅ now includes year
                 "passengers": passengers,
                 "chart_status": chart_status,
                 "pnr": pnr
@@ -109,6 +125,7 @@ def get_pnr_status(pnr):
             "departure_time": "",
             "to_station": "",
             "arrival_time": "",
+            "journey_date": "",
             "passengers": [{
                 "status": f"Error: {str(e)}",
                 "probability": "-"
