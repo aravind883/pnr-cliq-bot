@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    - cron: '0 * * * *'   # Runs every hour
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -15,6 +15,7 @@ jobs:
     env:
       PNR_LIST: ${{ secrets.PNR_LIST }}
       ZOHO_WEBHOOK_URL: ${{ secrets.ZOHO_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}  # ✅ ADD THIS
 
     steps:
       - name: Checkout Repository
@@ -25,15 +26,15 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install Dependencies & Playwright Browsers
+      - name: Install Dependencies
         run: |
           pip install -r requirements.txt
           playwright install --with-deps
 
-      - name: Run PNR Script
+      - name: Run Script
         run: python main.py
 
-      - name: Commit and Push state.json
+      - name: Commit state.json
         run: |
           git config --global user.name "pnr-bot"
           git config --global user.email "pnr-bot@example.com"
