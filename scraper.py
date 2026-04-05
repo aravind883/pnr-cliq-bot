@@ -13,7 +13,7 @@ def get_pnr_status(pnr):
             page.wait_for_selector("tbody tr", timeout=20000)
 
             # -----------------------------
-            # TRAIN NAME (FIXED)
+            # TRAIN NAME
             # -----------------------------
             train_el = page.locator("text=/\\d{5} -/").first
             train_text = train_el.inner_text().strip() if train_el else "Unknown Train"
@@ -27,28 +27,31 @@ def get_pnr_status(pnr):
                 train_name = parts[1].strip()
 
             # -----------------------------
-            # STATIONS + RAW TEXT
+            # ROUTE (FIXED EXTRACTION)
             # -----------------------------
-            route_blocks = page.locator("p").all_text_contents()
+            route_elements = page.locator("p.body-sm").all_text_contents()
 
-            from_station = ""
-            to_station = ""
+            from_station = "Unknown"
+            to_station = "Unknown"
             departure_time = ""
             arrival_time = ""
 
-            for text in route_blocks:
-                if "-" in text and "," in text:
-                    if not from_station:
-                        from_station = text.strip()
-                    elif not to_station:
-                        to_station = text.strip()
+            route_data = []
 
-                # Extract time
-                if ":" in text and len(text.strip()) <= 5:
-                    if not departure_time:
-                        departure_time = text.strip()
-                    elif not arrival_time:
-                        arrival_time = text.strip()
+            for text in route_elements:
+                if "-" in text and "," in text:
+                    route_data.append(text.strip())
+
+            if len(route_data) >= 2:
+                # Example: "Tambaram - TBM, 21:02"
+                from_parts = route_data[0].split(",")
+                to_parts = route_data[1].split(",")
+
+                from_station = from_parts[0].strip()
+                departure_time = from_parts[1].strip() if len(from_parts) > 1 else ""
+
+                to_station = to_parts[0].strip()
+                arrival_time = to_parts[1].strip() if len(to_parts) > 1 else ""
 
             # -----------------------------
             # PASSENGERS
@@ -90,9 +93,9 @@ def get_pnr_status(pnr):
                 "train_name": train_name,
                 "train_number": train_number,
                 "from_station": from_station,
-                "departure_time": departure_time,   # ONLY TIME
+                "departure_time": departure_time,   # ✅ now always from split
                 "to_station": to_station,
-                "arrival_time": arrival_time,       # ONLY TIME
+                "arrival_time": arrival_time,
                 "passengers": passengers,
                 "chart_status": chart_status,
                 "pnr": pnr
