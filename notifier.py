@@ -30,7 +30,7 @@ def process_data(data):
     dep_dt = format_datetime(date, dep_time)
     arr_dt = format_datetime(date, arr_time)
 
-    # ✅ NEXT DAY FIX
+    # Overnight fix
     if dep_dt and arr_dt and arr_dt <= dep_dt:
         arr_dt += timedelta(days=1)
 
@@ -41,17 +41,24 @@ def process_data(data):
 
 
 # -----------------------------
-# UNIFIED MESSAGE FORMATTER
+# STATUS COLOR (Discord)
 # -----------------------------
-def format_message(data, platform="cliq"):
-    # Markdown differences
-    bold = "**" if platform == "discord" else "*"
-    code = "`" if platform == "cliq" else ""
+def get_status_color(passengers):
+    for p in passengers:
+        if "CNF" in p["status"]:
+            return 0x2ecc71  # green
+        if "RAC" in p["status"]:
+            return 0xf1c40f  # yellow
+    return 0xe74c3c  # red (WL)
 
+
+# -----------------------------
+# DISCORD EMBED (🔥 PREMIUM)
+# -----------------------------
+def build_discord_embed(data):
     passengers = []
     for i, p in enumerate(data["passengers"], start=1):
         emoji = "🔴"
-
         if "CNF" in p["status"]:
             emoji = "🟢"
         elif "RAC" in p["status"]:
@@ -65,36 +72,92 @@ def format_message(data, platform="cliq"):
 
     passenger_text = "\n".join(passengers)
 
-    message = f"""
-🚆 {bold}{data['train_name']} ({data['train_number']}){bold}
+    embed = {
+        "title": f"🚆 {data['train_name']} ({data['train_number']})",
+        "color": get_status_color(data["passengers"]),
+        "fields": [
+            {
+                "name": "🟢 Departure",
+                "value": f"{data['from_station']}\n🕒 {data['formatted_departure']}",
+                "inline": False
+            },
+            {
+                "name": "🔴 Arrival",
+                "value": f"{data['to_station']}\n🕒 {data['formatted_arrival']}",
+                "inline": False
+            },
+            {
+                "name": "👥 Passenger Status",
+                "value": passenger_text,
+                "inline": False
+            },
+            {
+                "name": "📊 Chart Status",
+                "value": data["chart_status"],
+                "inline": True
+            }
+        ],
+        "footer": {
+            "text": f"PNR: {data['pnr']}"
+        },
+        "url": f"https://www.confirmtkt.com/pnr-status/{data['pnr']}"
+    }
 
-🟢 {bold}Departure{bold}
+    return embed
+
+
+# -----------------------------
+# CLIQ PREMIUM TEXT
+# -----------------------------
+def format_cliq_message(data):
+    passengers = []
+    for i, p in enumerate(data["passengers"], start=1):
+        emoji = "🔴"
+        if "CNF" in p["status"]:
+            emoji = "🟢"
+        elif "RAC" in p["status"]:
+            emoji = "🟡"
+
+        line = f"{emoji} Passenger {i} - {p['status']}"
+        if p["probability"] and p["probability"] != "-":
+            line += f" ({p['probability']})"
+
+        passengers.append(line)
+
+    passenger_text = "\n".join(passengers)
+
+    return f"""
+━━━━━━━━━━━━━━━━━━
+🚆 *{data['train_name']} ({data['train_number']})*
+━━━━━━━━━━━━━━━━━━
+
+🟢 *Departure*
 {data['from_station']}
 🕒 {data['formatted_departure']}
 
-🔴 {bold}Arrival{bold}
+🔴 *Arrival*
 {data['to_station']}
 🕒 {data['formatted_arrival']}
 
-👥 {bold}Passenger Status{bold}
+👥 *Passenger Status*
 {passenger_text}
 
-📊 {bold}Chart Status:{bold} {data['chart_status']}
+📊 *Chart Status:* {data['chart_status']}
 
-🔖 PNR: {code}{data['pnr']}{code}
+🔖 PNR: `{data['pnr']}`
 🔗 https://www.confirmtkt.com/pnr-status/{data['pnr']}
-"""
-
-    return message.strip()
+""".strip()
 
 
 # -----------------------------
 # SENDERS
 # -----------------------------
-def send_to_cliq(message):
+def send_to_cliq(data):
     if not ZOHO_WEBHOOK:
         print("Missing Zoho webhook")
         return
+
+    message = format_cliq_message(data)
 
     payload = {
         "text": message
@@ -104,13 +167,15 @@ def send_to_cliq(message):
     print("Cliq Status:", response.status_code)
 
 
-def send_to_discord(message):
+def send_to_discord(data):
     if not DISCORD_WEBHOOK:
         print("Missing Discord webhook")
         return
 
+    embed = build_discord_embed(data)
+
     payload = {
-        "content": message
+        "embeds": [embed]
     }
 
     response = requests.post(DISCORD_WEBHOOK, json=payload)
@@ -123,13 +188,7 @@ def send_to_discord(message):
 def send_notification(data):
     print("Sending payload:", data)
 
-    # ✅ Single source of truth
     data = process_data(data)
 
-    # Generate messages
-    cliq_msg = format_message(data, "cliq")
-    discord_msg = format_message(data, "discord")
-
-    # Send
-    send_to_cliq(cliq_msg)
-    send_to_discord(discord_msg)
+    send_to_cliq(data)
+    send_to_discord(data)
