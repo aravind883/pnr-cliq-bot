@@ -1,5 +1,4 @@
 from playwright.sync_api import sync_playwright
-import re
 from datetime import datetime
 
 
@@ -55,18 +54,22 @@ def get_pnr_status(pnr):
                 arrival_time = to_parts[1].strip() if len(to_parts) > 1 else ""
 
             # -----------------------------
-            # DATE WITH YEAR (FIXED)
+            # ✅ DATE (DOM BASED FIX)
             # -----------------------------
-            full_text = page.inner_text("body")
-
-            date_match = re.search(r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s(\d{1,2}\s\w+)", full_text)
-
             journey_date = "N/A"
 
-            if date_match:
-                day_month = date_match.group(2)   # "22 Apr"
-                current_year = datetime.now().year
-                journey_date = f"{day_month} {current_year}"  # "22 Apr 2026"
+            date_element = page.locator("text=/\\w{3},\\s\\d{1,2}\\s\\w+/").first
+
+            if date_element.count() > 0:
+                raw_date = date_element.inner_text().strip()
+
+                # Example: "Wed, 22 Apr"
+                parts = raw_date.split(",")
+
+                if len(parts) > 1:
+                    day_month = parts[1].strip()  # "22 Apr"
+                    current_year = datetime.now().year
+                    journey_date = f"{day_month} {current_year}"
 
             # -----------------------------
             # PASSENGERS
@@ -111,7 +114,7 @@ def get_pnr_status(pnr):
                 "departure_time": departure_time,
                 "to_station": to_station,
                 "arrival_time": arrival_time,
-                "journey_date": journey_date,   # ✅ now includes year
+                "journey_date": journey_date,   # ✅ FIXED
                 "passengers": passengers,
                 "chart_status": chart_status,
                 "pnr": pnr
@@ -125,7 +128,7 @@ def get_pnr_status(pnr):
             "departure_time": "",
             "to_station": "",
             "arrival_time": "",
-            "journey_date": "",
+            "journey_date": "N/A",
             "passengers": [{
                 "status": f"Error: {str(e)}",
                 "probability": "-"
