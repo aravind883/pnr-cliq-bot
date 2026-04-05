@@ -11,6 +11,7 @@ def get_pnr_status(pnr):
             url = f"https://www.confirmtkt.com/pnr-status/{pnr}"
             page.goto(url, timeout=60000)
 
+            # Wait for table rows (core data)
             page.wait_for_selector("tbody tr", timeout=20000)
 
             # -----------------------------
@@ -54,7 +55,7 @@ def get_pnr_status(pnr):
                 arrival_time = to_parts[1].strip() if len(to_parts) > 1 else ""
 
             # -----------------------------
-            # ✅ DATE CLEAN EXTRACTION
+            # DATE EXTRACTION (CLEAN)
             # -----------------------------
             journey_date = "N/A"
 
@@ -63,19 +64,13 @@ def get_pnr_status(pnr):
             if date_element.count() > 0:
                 raw_date = date_element.inner_text().strip()
 
-                # Example:
-                # "Wed, 22 Apr | SL | GN | Expected platform: 8"
-
-                # Step 1: split by "|"
+                # Example: "Wed, 22 Apr | SL | GN | Expected platform: 8"
                 clean_part = raw_date.split("|")[0].strip()
 
-                # Step 2: remove day (Wed,)
                 parts = clean_part.split(",")
 
                 if len(parts) > 1:
-                    day_month = parts[1].strip()  # "22 Apr"
-
-                    # Step 3: add dynamic year (NOT hardcoded)
+                    day_month = parts[1].strip()
                     current_year = datetime.now().year
                     journey_date = f"{day_month} {current_year}"
 
@@ -86,7 +81,7 @@ def get_pnr_status(pnr):
 
             passengers = []
 
-            for i, row in enumerate(rows, start=1):
+            for row in rows:
                 status_el = row.query_selector("td:nth-child(2) p.body-lg")
 
                 if status_el:
@@ -122,7 +117,7 @@ def get_pnr_status(pnr):
                 "departure_time": departure_time,
                 "to_station": to_station,
                 "arrival_time": arrival_time,
-                "journey_date": journey_date,   # ✅ CLEANED
+                "journey_date": journey_date,
                 "passengers": passengers,
                 "chart_status": chart_status,
                 "pnr": pnr
@@ -144,3 +139,25 @@ def get_pnr_status(pnr):
             "chart_status": "Unknown",
             "pnr": pnr
         }
+
+
+# -----------------------------
+# ✅ VALIDATION FUNCTION (NEW)
+# -----------------------------
+def is_valid_pnr_data(data):
+    if not data:
+        return False
+
+    # Invalid train
+    if data.get("train_name") in ["Error", None, ""]:
+        return False
+
+    # No passengers
+    if not data.get("passengers"):
+        return False
+
+    # All passengers show error
+    if all("Error" in p.get("status", "") for p in data["passengers"]):
+        return False
+
+    return True

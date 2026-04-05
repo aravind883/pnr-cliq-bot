@@ -30,7 +30,7 @@ def process_data(data):
     dep_dt = format_datetime(date, dep_time)
     arr_dt = format_datetime(date, arr_time)
 
-    # ✅ NEXT DAY FIX
+    # Overnight fix
     if dep_dt and arr_dt and arr_dt <= dep_dt:
         arr_dt += timedelta(days=1)
 
@@ -41,10 +41,9 @@ def process_data(data):
 
 
 # -----------------------------
-# UNIFIED MESSAGE FORMATTER
+# UNIFIED MESSAGE FORMAT
 # -----------------------------
 def format_message(data, platform="cliq"):
-    # Markdown differences
     bold = "**" if platform == "discord" else "*"
     code = "`" if platform == "cliq" else ""
 
@@ -123,13 +122,10 @@ def send_to_discord(message):
 def send_notification(data):
     print("Sending payload:", data)
 
-    # ✅ Single source of truth
     data = process_data(data)
 
-    # Generate messages
     cliq_msg = format_message(data, "cliq")
     discord_msg = format_message(data, "discord")
 
-    # Send
     send_to_cliq(cliq_msg)
     send_to_discord(discord_msg)
