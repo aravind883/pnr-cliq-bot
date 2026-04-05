@@ -10,13 +10,12 @@ def get_pnr_status(pnr):
             url = f"https://www.confirmtkt.com/pnr-status/{pnr}"
             page.goto(url, timeout=60000)
 
-            # Wait for passenger table
             page.wait_for_selector("tbody tr", timeout=20000)
 
             # -----------------------------
-            # TRAIN NAME & NUMBER
+            # ✅ TRAIN NAME (FIXED)
             # -----------------------------
-            train_el = page.query_selector("p.body-md.font-medium")
+            train_el = page.locator("text=/\\d{5} -/").first
             train_text = train_el.inner_text().strip() if train_el else "Unknown Train"
 
             train_number = ""
@@ -28,7 +27,7 @@ def get_pnr_status(pnr):
                 train_name = parts[1].strip()
 
             # -----------------------------
-            # FROM / TO STATIONS + TIME
+            # STATIONS + TIME
             # -----------------------------
             station_elements = page.query_selector_all("p.body-sm.text-secondary")
 
@@ -40,25 +39,22 @@ def get_pnr_status(pnr):
             departure_time = time_elements[0].inner_text().strip() if len(time_elements) > 0 else "00:00"
             arrival_time = time_elements[1].inner_text().strip() if len(time_elements) > 1 else "00:00"
 
-            # Convert to datetime string (basic formatting)
             departure_time = f"2026-04-22 {departure_time}"
             arrival_time = f"2026-04-23 {arrival_time}"
 
             # -----------------------------
-            # ✅ PASSENGER STATUS (FIXED)
+            # PASSENGERS (ONLY CURRENT STATUS)
             # -----------------------------
             rows = page.query_selector_all("tbody tr")
 
             passengers = []
 
             for i, row in enumerate(rows, start=1):
-                # ONLY CURRENT STATUS COLUMN
                 status_el = row.query_selector("td:nth-child(2) p.body-lg")
 
                 if status_el:
                     status = status_el.inner_text().strip()
 
-                    # Try to get probability if exists
                     prob_el = row.query_selector("td:nth-child(2) p.body-xs")
                     probability = prob_el.inner_text().strip() if prob_el else "-"
 
@@ -67,7 +63,6 @@ def get_pnr_status(pnr):
                         "probability": probability
                     })
 
-            # Fallback
             if not passengers:
                 passengers.append({
                     "status": "Not Available",
@@ -78,15 +73,11 @@ def get_pnr_status(pnr):
             # CHART STATUS
             # -----------------------------
             chart_status = "Prepared"
-
             if page.locator("text=Chart not prepared").count() > 0:
                 chart_status = "Not Prepared"
 
             browser.close()
 
-            # -----------------------------
-            # FINAL STRUCTURED DATA
-            # -----------------------------
             return {
                 "train_name": train_name,
                 "train_number": train_number,
